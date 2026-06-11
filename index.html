@@ -1224,6 +1224,7 @@
             background: rgba(0,0,0,0.7);
             z-index: 200;
             display: flex; align-items: center; justify-content: center;
+            pointer-events: auto;
         }
         .save-confirm-overlay.hidden { display: none; }
         .save-confirm-box {
@@ -4925,8 +4926,18 @@ window.addEventListener('touchmove', e => {
 // "点击进入"按钮 — 用户首次交互，解除浏览器音频限制并进入主菜单
 document.getElementById('tap-to-start').addEventListener('click', () => {
     const loadScreen = document.getElementById('loading-screen');
+    // 解锁浏览器音频策略：先创建并resume AudioContext
+    AudioSys.initSynth();
+    if (AudioSys.ctx && AudioSys.ctx.state === 'suspended') AudioSys.ctx.resume();
     AudioSys.unmuteAll();          // 恢复音量
-    AudioSys.playMenuBgm();        // 播放主菜单BGM（此时已有音量）
+    // 直接播放音频，确保在用户手势同步上下文中执行
+    const menuAudio = AudioSys.audioCache['menuBgm'];
+    if (menuAudio) {
+        menuAudio.volume = AudioSys._targetVolumes['menuBgm'] || 0.35;
+        menuAudio.currentTime = 0;
+        menuAudio.play().catch(function(err){ console.warn('[Audio] menuBgm play failed:', err); });
+        AudioSys.currentBgmKey = 'menuBgm';
+    }
     loadScreen.classList.add('hidden');
     ui.menu.classList.remove('hidden');
     startSanityTimer();            // 启动理智恢复计时
@@ -5001,6 +5012,7 @@ function loopWithAutoSkill() {
     if (!game.active) return;
     requestAnimationFrame(loopWithAutoSkill);
     if (game.paused||game.choosingUpgrade) return;
+    try {
     game.frame++;
     if(game.comboTimer>0){ game.comboTimer--; if(game.comboTimer<=0) resetCombo(); }
     ctx.save();
@@ -5055,6 +5067,7 @@ function loopWithAutoSkill() {
     for(let i=entities.shockwaves.length-1;i>=0;i--){ const s=entities.shockwaves[i]; s.update(); s.draw(); if(s.alpha<=0) entities.shockwaves.splice(i,1); }
     for(let i=entities.texts.length-1;i>=0;i--){ const t=entities.texts[i]; t.update(); t.draw(); if(t.life<=0) entities.texts.splice(i,1); }
     ctx.restore();
+    } catch(e) { console.error('[Loop Error]', e); }
 }
 
 // 用增强版替换loop
